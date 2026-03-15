@@ -1,7 +1,3 @@
-*# Object files
-*.o
-*.obj
-
 # Executables
 *.exe
 *.out
@@ -20,8 +16,6 @@ a
 *.so
 *.dylib
 
-# Debug files
-*.dSYM/
 
 # Build directories
 build/
@@ -37,7 +31,3 @@ compile_commands.json
 # Editors
 .vscode/
 .idea/
-
-# OS files
-.DS_Store
-Thumbs.db
