@@ -24,13 +24,48 @@ int main(int argc, char *argv[]) {
       } else {
         perror("getcwd failed");
       }
+    } else if (strncmp(input, "cd ", 3) == 0) {
+      // Implement cd builtin
+      char *directory = input + 3;
+      // Remove trailing whitespace if present
+      int len = strlen(directory);
+      while (len > 0 && (directory[len-1] == ' ' || directory[len-1] == '\t' || directory[len-1] == '\n')) {
+        directory[len-1] = '\0';
+        len--;
+      }
+      
+      // Handle ~ expansion
+      char expanded_path[1024];
+      if (directory[0] == '~') {
+        const char *home = getenv("HOME");
+        if (home == NULL) {
+          printf("cd: %s: No such file or directory\n", directory);
+        } else {
+          // Replace ~ with home directory
+          if (directory[1] == '\0') {
+            strcpy(expanded_path, home);
+          } else if (directory[1] == '/') {
+            snprintf(expanded_path, sizeof(expanded_path), "%s%s", home, directory + 1);
+          } else {
+            printf("cd: %s: No such file or directory\n", directory);
+            continue;
+          }
+          directory = expanded_path;
+          
+          if (chdir(directory) != 0) {
+            printf("cd: %s: No such file or directory\n", input + 3);
+          }
+        }
+      } else if (chdir(directory) != 0) {
+        printf("cd: %s: No such file or directory\n", input + 3);
+      }
     } else if (strncmp(input, "echo ", 5) == 0) {
       printf("%s\n", input + 5);
     } else if (strncmp(input, "type ", 5) == 0) {
       // Extract the argument after "type " command
       char *arg = input + 5;
       // Check if the argument is a shell builtin
-      if (!strcmp(arg, "exit") || !strcmp(arg, "echo") || !strcmp(arg, "type") || !strcmp(arg, "pwd")) {
+      if (!strcmp(arg, "exit") || !strcmp(arg, "echo") || !strcmp(arg, "type") || !strcmp(arg, "pwd") || !strcmp(arg, "cd")) {
         printf("%s is a shell builtin\n", arg);
       } else {
         // Search for the command in PATH
