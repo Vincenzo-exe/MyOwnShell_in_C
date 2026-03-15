@@ -3,18 +3,66 @@
 #include <string.h>
 #include <unistd.h>
 #include <sys/wait.h>
+#include <readline/readline.h>
+#include <readline/history.h>
+
+// Array of builtin commands for autocompletion
+const char *builtins[] = {"exit", "echo", "type", "pwd", "cd", NULL};
+
+// Autocompletion function
+char *command_generator(const char *text, int state) {
+  static int list_index, len;
+  const char *name;
+  
+  if (!state) {
+    list_index = 0;
+    len = strlen(text);
+  }
+  
+  while ((name = builtins[list_index++]) != NULL) {
+    if (strncmp(name, text, len) == 0) {
+      return malloc(strlen(name) + 1) ? strcpy(malloc(strlen(name) + 1), name) : NULL;
+    }
+  }
+  
+  return NULL;
+}
+
+char **command_completion(const char *text, int start, int end) {
+  // Only complete at the start of the line
+  if (start == 0) {
+    rl_completion_append_character = ' ';
+    return rl_completion_matches(text, command_generator);
+  }
+  return NULL;
+}
 
 int main(int argc, char *argv[]) {
   // Flush after every printf
   setbuf(stdout, NULL);
+  
+  // Set up readline autocompletion
+  rl_attempted_completion_function = command_completion;
+  
   while (1) {
-    printf("$ ");
-    // Wait for user input
-    char input[100];
-    fgets(input, 100, stdin);
-    // Remove the trailing newline
-    input[strlen(input) - 1] = '\0';
+    char *input = readline("$ ");
+    
+    // Handle EOF (Ctrl+D)
+    if (input == NULL) {
+      break;
+    }
+    
+    // Skip empty input
+    if (strlen(input) == 0) {
+      free(input);
+      continue;
+    }
+    
+    // Add to history
+    add_history(input);
+    
     if (strcmp(input, "exit") == 0) {
+      free(input);
       break;
     } else if (strcmp(input, "pwd") == 0) {
       // Implement pwd builtin
@@ -48,6 +96,7 @@ int main(int argc, char *argv[]) {
             snprintf(expanded_path, sizeof(expanded_path), "%s%s", home, directory + 1);
           } else {
             printf("cd: %s: No such file or directory\n", directory);
+            free(input);
             continue;
           }
           directory = expanded_path;
@@ -72,10 +121,10 @@ int main(int argc, char *argv[]) {
         char *path_env = getenv("PATH");
         if (path_env == NULL) {
           printf("%s: not found\n", arg);
+          free(input);
           continue;
         }
         
-        // Create a copy of PATH since strtok modifies the string
         char *path_copy = malloc(strlen(path_env) + 1);
         strcpy(path_copy, path_env);
         
@@ -83,7 +132,6 @@ int main(int argc, char *argv[]) {
         char *directory = strtok(path_copy, ":");
         
         while (directory != NULL && !found) {
-          // Build the full path: directory/command
           char full_path[512];
           snprintf(full_path, sizeof(full_path), "%s/%s", directory, arg);
           
@@ -104,11 +152,9 @@ int main(int argc, char *argv[]) {
       }
     } else {
       // Handle external program execution
-      // Parse input into arguments
       char input_copy[100];
       strcpy(input_copy, input);
       
-      // Count arguments
       int arg_count = 0;
       char *temp = input_copy;
       while (*temp) {
@@ -118,10 +164,8 @@ int main(int argc, char *argv[]) {
         temp++;
       }
       
-      // Allocate argv array (arg_count + 1 for NULL terminator)
       char **args = malloc((arg_count + 1) * sizeof(char*));
       
-      // Parse arguments
       strcpy(input_copy, input);
       args[0] = strtok(input_copy, " ");
       for (int i = 1; i < arg_count; i++) {
@@ -129,11 +173,11 @@ int main(int argc, char *argv[]) {
       }
       args[arg_count] = NULL;
       
-      // Search for command in PATH
       char *path_env = getenv("PATH");
       if (path_env == NULL) {
         printf("%s: command not found\n", args[0]);
         free(args);
+        free(input);
         continue;
       }
       
@@ -157,15 +201,12 @@ int main(int argc, char *argv[]) {
       free(path_copy);
       
       if (found) {
-        // Fork and execute
         pid_t pid = fork();
         if (pid == 0) {
-          // Child process
           execv(full_path, args);
           perror("execv failed");
           exit(1);
         } else if (pid > 0) {
-          // Parent process - wait for child
           wait(NULL);
         } else {
           perror("fork failed");
@@ -176,6 +217,8 @@ int main(int argc, char *argv[]) {
       
       free(args);
     }
+    
+    free(input);
   }
   return 0;
 }
