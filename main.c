@@ -16,13 +16,21 @@ int main(int argc, char *argv[]) {
     input[strlen(input) - 1] = '\0';
     if (strcmp(input, "exit") == 0) {
       break;
+    } else if (strcmp(input, "pwd") == 0) {
+      // Implement pwd builtin
+      char cwd[1024];
+      if (getcwd(cwd, sizeof(cwd)) != NULL) {
+        printf("%s\n", cwd);
+      } else {
+        perror("getcwd failed");
+      }
     } else if (strncmp(input, "echo ", 5) == 0) {
       printf("%s\n", input + 5);
     } else if (strncmp(input, "type ", 5) == 0) {
       // Extract the argument after "type " command
       char *arg = input + 5;
       // Check if the argument is a shell builtin
-      if (!strcmp(arg, "exit") || !strcmp(arg, "echo") || !strcmp(arg, "type")) {
+      if (!strcmp(arg, "exit") || !strcmp(arg, "echo") || !strcmp(arg, "type") || !strcmp(arg, "pwd")) {
         printf("%s is a shell builtin\n", arg);
       } else {
         // Search for the command in PATH
