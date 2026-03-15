@@ -11,7 +11,7 @@ A UNIX shell implemented from scratch in C — supports REPL, built-in commands,
 
 ## Build & Run
 
-you might sudo apt install libreadline-dev
+you might need to sudo apt install libreadline-dev
 
 ```bash
 gcc -o shell main.c
