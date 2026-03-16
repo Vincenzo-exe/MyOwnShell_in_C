@@ -3,36 +3,135 @@
 #include <string.h>
 #include <unistd.h>
 #include <sys/wait.h>
+#include <dirent.h>
+#include <errno.h>
 #include <readline/readline.h>
 #include <readline/history.h>
 
 // Array of builtin commands for autocompletion
 const char *builtins[] = {"exit", "echo", "type", "pwd", "cd", NULL};
 
+static void free_string_list(char **list, size_t count) {
+  if (list == NULL) return;
+  for (size_t i = 0; i < count; i++) free(list[i]);
+  free(list);
+}
+
+static int string_list_contains(char **list, size_t count, const char *s) {
+  for (size_t i = 0; i < count; i++) {
+    if (strcmp(list[i], s) == 0) return 1;
+  }
+  return 0;
+}
+
+static void string_list_push_unique(char ***list, size_t *count, size_t *cap, const char *s) {
+  if (string_list_contains(*list, *count, s)) return;
+
+  if (*count + 1 > *cap) {
+    size_t new_cap = (*cap == 0) ? 16 : (*cap * 2);
+    char **new_list = realloc(*list, new_cap * sizeof(char *));
+    if (new_list == NULL) return;
+    *list = new_list;
+    *cap = new_cap;
+  }
+
+  char *copy = malloc(strlen(s) + 1);
+  if (copy == NULL) return;
+  strcpy(copy, s);
+  (*list)[(*count)++] = copy;
+}
+
 // Autocompletion function
 char *command_generator(const char *text, int state) {
-  static int list_index, len;
-  const char *name;
+  static char **candidates = NULL;
+  static size_t candidate_count = 0;
+  static size_t candidate_cap = 0;
+  static size_t candidate_index = 0;
+  static int len = 0;
   
   if (!state) {
-    list_index = 0;
     len = strlen(text);
-  }
-  
-  while ((name = builtins[list_index++]) != NULL) {
-    if (strncmp(name, text, len) == 0) {
-      return malloc(strlen(name) + 1) ? strcpy(malloc(strlen(name) + 1), name) : NULL;
+    candidate_index = 0;
+    free_string_list(candidates, candidate_count);
+    candidates = NULL;
+    candidate_count = 0;
+    candidate_cap = 0;
+
+    // Builtins
+    for (int i = 0; builtins[i] != NULL; i++) {
+      if (strncmp(builtins[i], text, len) == 0) {
+        string_list_push_unique(&candidates, &candidate_count, &candidate_cap, builtins[i]);
+      }
+    }
+
+    // External executables in PATH
+    const char *path_env = getenv("PATH");
+    if (path_env != NULL && path_env[0] != '\0') {
+      char *path_copy = malloc(strlen(path_env) + 1);
+      if (path_copy != NULL) {
+        strcpy(path_copy, path_env);
+
+        // Support both ':' (unix) and ';' (windows) just in case.
+        const char *delims = strchr(path_copy, ';') ? ";:" : ":";
+        char *saveptr = NULL;
+        for (char *dir = strtok_r(path_copy, delims, &saveptr); dir != NULL;
+             dir = strtok_r(NULL, delims, &saveptr)) {
+          if (dir[0] == '\0') continue;
+
+          DIR *dp = opendir(dir);
+          if (dp == NULL) {
+            continue; // PATH can contain non-existent/unreadable dirs
+          }
+
+          struct dirent *entry;
+          while ((entry = readdir(dp)) != NULL) {
+            const char *name = entry->d_name;
+            if (name[0] == '.') continue;
+            if (strncmp(name, text, len) != 0) continue;
+
+            // Verify it is executable.
+            char full_path[1024];
+            size_t dlen = strlen(dir);
+            int needs_slash = (dlen > 0 && dir[dlen - 1] != '/');
+            if (snprintf(full_path, sizeof(full_path), "%s%s%s", dir, needs_slash ? "/" : "", name) < 0) {
+              continue;
+            }
+            if (access(full_path, X_OK) == 0) {
+              string_list_push_unique(&candidates, &candidate_count, &candidate_cap, name);
+            }
+          }
+
+          closedir(dp);
+        }
+
+        free(path_copy);
+      }
     }
   }
   
-  return NULL;
+  if (candidate_index >= candidate_count) return NULL;
+
+  char *match = malloc(strlen(candidates[candidate_index]) + 1);
+  if (match == NULL) return NULL;
+  strcpy(match, candidates[candidate_index]);
+  candidate_index++;
+  return match;
 }
 
 char **command_completion(const char *text, int start, int end) {
   // Only complete at the start of the line
   if (start == 0) {
     rl_completion_append_character = ' ';
-    return rl_completion_matches(text, command_generator);
+    // Prevent falling back to filename completion for commands.
+    rl_attempted_completion_over = 1;
+
+    char **matches = rl_completion_matches(text, command_generator);
+    if (matches == NULL) {
+      // No valid completions: keep input unchanged and ring the bell.
+      putchar('\x07');
+      fflush(stdout);
+    }
+    return matches;
   }
   return NULL;
 }
