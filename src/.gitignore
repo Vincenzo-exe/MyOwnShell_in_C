@@ -1,0 +1,43 @@
+*# Object files
+*.o
+*.obj
+
+# Executables
+*.exe
+*.out
+*.app
+*.i*86
+*.x86_64
+*.hex
+a.out
+a
+
+# Libraries
+*.lib
+*.a
+*.la
+*.lo
+*.so
+*.dylib
+
+# Debug files
+*.dSYM/
+
+# Build directories
+build/
+bin/
+
+# CMake
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+Makefile
+compile_commands.json
+
+# Editors
+.vscode/
+.idea/
+
+# OS files
+.DS_Store
+Thumbs.db
