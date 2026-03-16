@@ -1,5 +1,5 @@
 # MyOwnShell_in_C
-A UNIX shell implemented from scratch in C — supports REPL, built-in commands, process spawning, and more.
+A UNIX shell implemented from scratch in C — supports REPL, built-in commands, process spawning,tab completion and more.
 
 ## Features
 
